@@ -558,6 +558,111 @@
           }
         }
       }
+    },
+
+    "EncodingQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": { "Fn::Join": [ "-", [ { "Ref": "AWS::StackName"}, "encoding-queue" ] ] }
+      }
+    },
+
+    "EncodingQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2008-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Action": [
+                "SQS:SendMessage"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": { "Ref": "EncodingBucketSNSTopic" }
+                }
+              }
+            }
+          ]
+        },
+        "Queues": [
+          { "Ref": "EncodingQueue" }
+        ]
+      }
+    },
+
+    "EncodingBucketSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Fn::GetAtt": [ "EncodingQueue", "Arn" ]
+            },
+            "Protocol": "sqs"
+          }
+        ],
+        "TopicName": {
+          "Fn::Join": [ "-", [ { "Ref": "AWS::StackName"}, "encoding-sns-topic" ] ]
+        }
+      }
+    },
+
+    "EncodingBucketSNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Id": "EncodingBucketSNSTopicPolicy",
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "SNS:Publish"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Join": [ "", [ "arn:aws:s3:*:*:", { "Fn::Join": [ "-", [ { "Ref": "AWS::StackName"}, "encoding-bucket" ] ] } ] ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Topics": [
+          { "Ref": "EncodingBucketSNSTopic" }
+        ]
+      }
+    },
+
+    "EncodingBucket": {
+      "DependsOn" : [ "EncodingQueue" ],
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl" : "BucketOwnerFullControl",
+        "BucketName" : { "Fn::Join": [ "-", [ { "Ref": "AWS::StackName"}, "encoding-bucket" ] ] },
+        "NotificationConfiguration": {
+          "TopicConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Topic": { "Ref": "EncodingBucketSNSTopic" }
+            }
+          ]
+        },
+        "Tags": [
+          { "Key" : "Name", "Value" : { "Fn::Join": [ "-", [ { "Ref": "AWS::StackName"}, "EncodingBucket" ] ] } }
+        ]
+      }
     }
   },
 
